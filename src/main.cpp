@@ -3,14 +3,23 @@
 #include <queue>
 
 // The remote service we wish to connect to.
-static BLEUUID serviceUUID("DEAD");
+static BLEUUID serviceUUID("BAAD");
 // The characteristic of the remote service we are interested in.
-static BLEUUID charUUID("BEEF");
+static BLEUUID charUUID("F00D");
 
 NimBLEScan *pBLEScan;
 
-std::queue<NimBLEAdvertisedDevice *> deviceToConnect;
+std::queue<NimBLEAddress> deviceToConnect;
 std::map<uint16_t, BLEClient *> connectedDevices;
+
+static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) {
+	Serial.print("Notify callback for characteristic ");
+	Serial.print(pBLERemoteCharacteristic->getUUID().toString().c_str());
+	Serial.print(" of data length ");
+	Serial.println(length);
+	Serial.print("data: ");
+	Serial.println((char*)pData);
+}
 
 class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks
 {
@@ -19,31 +28,46 @@ class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks
 		Serial.printf("Advertised Device: %s \n", advertisedDevice->toString().c_str());
 		if (advertisedDevice->haveServiceUUID() && advertisedDevice->isAdvertisingService(serviceUUID))
 		{
-			deviceToConnect.push(advertisedDevice);
+			deviceToConnect.push(advertisedDevice->getAddress());
 		}
 	}
 };
 
 bool connectToServer()
 {
-	NimBLEAdvertisedDevice *currentDevice = deviceToConnect.front();
+	NimBLEAddress currentDevice = deviceToConnect.front();
 	deviceToConnect.pop();
 
 	Serial.print("Forming a connection to ");
-	Serial.println(currentDevice->getAddress().toString().c_str());
+	Serial.println(currentDevice.toString().c_str());
 
 	BLEClient *pClient = BLEDevice::createClient();
 	Serial.println(" - Created client");
 
 	// Connect to the remove BLE Server.
-	pClient->connect(currentDevice->getAddress().toString().c_str()); // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
-	Serial.println(" - Connected to server");
+	pClient->connect(currentDevice); // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
+
+	if(pClient->connect(currentDevice))
+		Serial.println(" - Connected to server");
 
 	// Obtain a reference to the service we are after in the remote BLE server.
-	BLERemoteService *pRemoteService = pClient->getService(serviceUUID);
+	BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
+	if (pRemoteService == nullptr) {
+		Serial.print("Failed to find our service UUID: ");
+		Serial.println(serviceUUID.toString().c_str());
+		pClient->disconnect();
+		return false;
+	}
+    Serial.println(" - Found our service");
 
 	// Obtain a reference to the characteristic in the service of the remote BLE server.
-	NimBLERemoteCharacteristic *pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
+	NimBLERemoteCharacteristic *pRemoteCharacteristic;
+	if(pRemoteService != nullptr) {
+		pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
+	} else {
+		return false;
+	}
+
 	if (pRemoteCharacteristic == nullptr)
 	{
 		Serial.print("Failed to find our characteristic UUID: ");
@@ -53,8 +77,15 @@ bool connectToServer()
 	}
 	Serial.println(" - Found our characteristic");
 
-	connectedDevices[pClient->getConnId()] = pClient;
+	if(pRemoteCharacteristic->canNotify()) {
+		if(!pRemoteCharacteristic->subscribe(true, notifyCallback)) {
+			pClient->disconnect();
+			return false;
+		}
+		Serial.println(" - Found our characteristic");
+	}
 
+	connectedDevices[pClient->getConnId()] = pClient;
 	return true;
 }
 
