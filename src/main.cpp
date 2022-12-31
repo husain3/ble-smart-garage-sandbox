@@ -3,9 +3,12 @@
 #include <queue>
 
 // The remote service we wish to connect to.
-static BLEUUID serviceUUID("BAAD");
-// The characteristic of the remote service we are interested in.
-static BLEUUID charUUID("F00D");
+static BLEUUID authorizedVehicleServiceUUID("AAAA");
+
+// The characteristics of the remote service we are interested in.
+static BLEUUID dateTimeCharacteristicUUID("BBBB");
+static BLEUUID hashCharacteristicUUID("CCCC");
+static BLEUUID aliveTimeCharacteristicUUID("DDDD");
 
 NimBLEScan *pBLEScan;
 
@@ -26,7 +29,7 @@ class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks
 	void onResult(NimBLEAdvertisedDevice *advertisedDevice)
 	{
 		Serial.printf("Advertised Device: %s \n", advertisedDevice->toString().c_str());
-		if (advertisedDevice->haveServiceUUID() && advertisedDevice->isAdvertisingService(serviceUUID))
+		if (advertisedDevice->haveServiceUUID() && advertisedDevice->isAdvertisingService(authorizedVehicleServiceUUID))
 		{
 			deviceToConnect.push(advertisedDevice->getAddress());
 		}
@@ -51,41 +54,50 @@ bool connectToServer()
 		Serial.println(" - Connected to server");
 
 	// Obtain a reference to the service we are after in the remote BLE server.
-	BLERemoteService* pRemoteService = pClient->getService(serviceUUID);
-	if (pRemoteService == nullptr) {
+	BLERemoteService* pAuthorizedVehicleService = pClient->getService(authorizedVehicleServiceUUID);
+	if (pAuthorizedVehicleService == nullptr) {
 		Serial.print("Failed to find our service UUID: ");
-		Serial.println(serviceUUID.toString().c_str());
+		Serial.println(authorizedVehicleServiceUUID.toString().c_str());
 		pClient->disconnect();
 		return false;
 	}
     Serial.println(" - Found our service");
 
 	// Obtain a reference to the characteristic in the service of the remote BLE server.
-	NimBLERemoteCharacteristic *pRemoteCharacteristic;
-	if(pRemoteService != nullptr) {
-		pRemoteCharacteristic = pRemoteService->getCharacteristic(charUUID);
+	NimBLERemoteCharacteristic *pDateTimeCharacteristic;
+	NimBLERemoteCharacteristic *pHashCharacteristic;
+	NimBLERemoteCharacteristic *pAliveTimeCharacteristic;
+	if(pAuthorizedVehicleService != nullptr) {
+		pDateTimeCharacteristic = pAuthorizedVehicleService->getCharacteristic(dateTimeCharacteristicUUID);
+		pHashCharacteristic = pAuthorizedVehicleService->getCharacteristic(hashCharacteristicUUID);
+		pAliveTimeCharacteristic = pAuthorizedVehicleService->getCharacteristic(aliveTimeCharacteristicUUID);
 	} else {
 		return false;
 	}
 
-	if (pRemoteCharacteristic == nullptr)
+	if (pDateTimeCharacteristic == nullptr || pHashCharacteristic == nullptr || pAliveTimeCharacteristic == nullptr )
 	{
-		Serial.print("Failed to find our characteristic UUID: ");
-		Serial.println(charUUID.toString().c_str());
+		Serial.print("Failed to find all characteristics: ");
+		if(pDateTimeCharacteristic == nullptr)
+			Serial.println("BBBB");
+		if(pHashCharacteristic == nullptr)
+			Serial.println("CCCC");
+		if(pAliveTimeCharacteristic == nullptr)
+			Serial.println("DDDD");
+
 		pClient->disconnect();
 		return false;
 	}
-	Serial.println(" - Found our characteristic");
+	Serial.println(" - Found our characteristics");
 
-	if(pRemoteCharacteristic->canNotify()) {
-		if(!pRemoteCharacteristic->subscribe(true, notifyCallback)) {
+	if(pHashCharacteristic->canNotify()) {
+		if(!pHashCharacteristic->subscribe(true, notifyCallback)) {
 			pClient->disconnect();
 			return false;
 		}
-		Serial.println(" - Found our characteristic");
+		Serial.println(" - Found our characteristics");
 	}
 
-	connectedDevices[pClient->getConnId()] = pClient;
 	return true;
 }
 
