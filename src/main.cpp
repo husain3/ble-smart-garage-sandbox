@@ -48,6 +48,7 @@ public:
 	void onConnect(BLEClient* pClient) {
 		connectedDevices[pClient->getConnId()] = pClient;
 		Serial.println("onConnect");
+		pClient->updateConnParams(120,120,0,60);
 	}
 
 	void onDisconnect(BLEClient* pClient) {
@@ -65,7 +66,7 @@ public:
 		return true;
 	}
 
-	void onAuthenticationComplete(ble_gap_conn_desc desc){
+	void onAuthenticationComplete(ble_gap_conn_desc* desc){
 		Serial.println("Starting BLE work!");
 	}
 /*******************************************************************/
@@ -91,7 +92,8 @@ bool connectToServer()
 	Serial.print("Forming a connection to ");
 	Serial.println(currentDevice.toString().c_str());
 
-	BLEClient *pClient = BLEDevice::createClient();
+	NimBLEClient *pClient = BLEDevice::createClient();
+	pClient->setClientCallbacks(new Monitor());
 	Serial.println(" - Created client");
 
 	// Connect to the remove BLE Server.
@@ -137,6 +139,12 @@ bool connectToServer()
 	}
 	Serial.println(" - Found our characteristics");
 
+	if (pDateTimeCharacteristic->canWrite())
+	{
+		if(pDateTimeCharacteristic->writeValue<long>(millis(), true))
+			Serial.println("Time written to client");
+	}
+
 	if(pHashCharacteristic->canNotify()) {
 		if(!pHashCharacteristic->subscribe(true, notifyCallback)) {
 			pClient->disconnect();
@@ -166,6 +174,7 @@ void setup()
 	pBLEScan->setMaxResults(0);	   // do not store the scan results, use callback only.
 }
 
+long lastWrittenTime = 0;
 void loop()
 {
 	if (!deviceToConnect.empty())
@@ -185,6 +194,28 @@ void loop()
 	{
 		// Start scan with: duration = 0 seconds(forever), no scan end callback, not a continuation of a previous scan.
 		pBLEScan->start(0, nullptr, false);
+	}
+
+	long currentTime = millis();
+
+	if (currentTime - lastWrittenTime > 1000)
+	{
+		if(!connectedDevices.empty()) {
+
+			BLEClient *pClient = connectedDevices.begin()->second;
+			NimBLERemoteService *pSvc = pClient->getService("AAAA");
+			if (pSvc)
+			{
+				NimBLERemoteCharacteristic *pChr = pSvc->getCharacteristic("BBBB");
+				if (pChr->canWrite())
+				{
+					if(pChr->writeValue<long>(currentTime))
+						Serial.println("Time written to client");
+					lastWrittenTime = currentTime;
+				}
+			}
+		}
+
 	}
 
 	delay(1000);
