@@ -142,7 +142,7 @@ bool connectToServer()
 			pClient->disconnect();
 			return false;
 		}
-		Serial.println(" - Found our characteristics");
+		Serial.println(" - Found our callback characteristic");
 	}
 
 	return true;
