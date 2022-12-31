@@ -15,18 +15,20 @@ NimBLEScan *pBLEScan;
 std::queue<NimBLEAddress> deviceToConnect;
 std::map<uint16_t, BLEClient *> connectedDevices;
 
-static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) {
+static void notifyCallback(BLERemoteCharacteristic *pBLERemoteCharacteristic, uint8_t *pData, size_t length, bool isNotify)
+{
 	Serial.print("Notify callback for characteristic ");
 	Serial.print(pBLERemoteCharacteristic->getUUID().toString().c_str());
 	Serial.print(" of data length ");
 	Serial.println(length);
 	Serial.print("data: ");
-	Serial.println((char*)pData);
+	Serial.println((char *)pData);
 }
 
 /**  None of these are required as they will be handled by the library with defaults. **
  **                       Remove as you see fit for your needs                        */
-class Monitor : public BLEClientCallbacks {
+class Monitor : public BLEClientCallbacks
+{
 public:
 	int16_t connection_id;
 	int16_t rssi_average = 0;
@@ -35,41 +37,48 @@ public:
 	 * phone at a known distance (2m, 3m, 5m, 10m) 2.average about 10 RSSI
 	 * values for each of these distances, Set distance_factor so that the
 	 * calculated distance approaches the actual distances, e.g. at 5m. */
-	static constexpr float reference_power  = -50;
+	static constexpr float reference_power = -50;
 	static constexpr float distance_factor = 3.5;
 
 	// uint8_t get_value() { return value++; }
 	// esp_err_t get_rssi() { return esp_ble_gap_read_rssi(remote_addr); }
 
-	static float get_distance(const int8_t rssi) {
-		return pow(10, (reference_power - rssi)/(10*distance_factor));
+	static float get_distance(const int8_t rssi)
+	{
+		return pow(10, (reference_power - rssi) / (10 * distance_factor));
 	}
 
-	void onConnect(BLEClient* pClient) {
+	void onConnect(BLEClient *pClient)
+	{
 		connectedDevices[pClient->getConnId()] = pClient;
 		Serial.println("onConnect");
-		pClient->updateConnParams(120,120,0,60);
+		pClient->updateConnParams(120, 120, 0, 60);
 	}
 
-	void onDisconnect(BLEClient* pClient) {
+	void onDisconnect(BLEClient *pClient)
+	{
 		connectedDevices.erase(pClient->getConnId());
 		Serial.println("onDisconnect");
 	}
-/***************** New - Security handled here ********************
-****** Note: these are the same return values as defaults ********/
-	uint32_t onPassKeyRequest(){
+	/***************** New - Security handled here ********************
+	****** Note: these are the same return values as defaults ********/
+	uint32_t onPassKeyRequest()
+	{
 		Serial.println("Client PassKeyRequest");
 		return 123456;
 	}
-	bool onConfirmPIN(uint32_t pass_key){
-		Serial.print("The passkey YES/NO number: ");Serial.println(pass_key);
+	bool onConfirmPIN(uint32_t pass_key)
+	{
+		Serial.print("The passkey YES/NO number: ");
+		Serial.println(pass_key);
 		return true;
 	}
 
-	void onAuthenticationComplete(ble_gap_conn_desc* desc){
+	void onAuthenticationComplete(ble_gap_conn_desc *desc)
+	{
 		Serial.println("Starting BLE work!");
 	}
-/*******************************************************************/
+	/*******************************************************************/
 };
 
 class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks
@@ -99,39 +108,43 @@ bool connectToServer()
 	// Connect to the remove BLE Server.
 	pClient->connect(currentDevice); // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
 
-	if(pClient->connect(currentDevice))
+	if (pClient->connect(currentDevice))
 		Serial.println(" - Connected to server");
 
 	// Obtain a reference to the service we are after in the remote BLE server.
-	BLERemoteService* pAuthorizedVehicleService = pClient->getService(authorizedVehicleServiceUUID);
-	if (pAuthorizedVehicleService == nullptr) {
+	BLERemoteService *pAuthorizedVehicleService = pClient->getService(authorizedVehicleServiceUUID);
+	if (pAuthorizedVehicleService == nullptr)
+	{
 		Serial.print("Failed to find our service UUID: ");
 		Serial.println(authorizedVehicleServiceUUID.toString().c_str());
 		pClient->disconnect();
 		return false;
 	}
-    Serial.println(" - Found our service");
+	Serial.println(" - Found our service");
 
 	// Obtain a reference to the characteristic in the service of the remote BLE server.
 	NimBLERemoteCharacteristic *pDateTimeCharacteristic;
 	NimBLERemoteCharacteristic *pHashCharacteristic;
 	NimBLERemoteCharacteristic *pAliveTimeCharacteristic;
-	if(pAuthorizedVehicleService != nullptr) {
+	if (pAuthorizedVehicleService != nullptr)
+	{
 		pDateTimeCharacteristic = pAuthorizedVehicleService->getCharacteristic(dateTimeCharacteristicUUID);
 		pHashCharacteristic = pAuthorizedVehicleService->getCharacteristic(hashCharacteristicUUID);
 		pAliveTimeCharacteristic = pAuthorizedVehicleService->getCharacteristic(aliveTimeCharacteristicUUID);
-	} else {
+	}
+	else
+	{
 		return false;
 	}
 
-	if (pDateTimeCharacteristic == nullptr || pHashCharacteristic == nullptr || pAliveTimeCharacteristic == nullptr )
+	if (pDateTimeCharacteristic == nullptr || pHashCharacteristic == nullptr || pAliveTimeCharacteristic == nullptr)
 	{
 		Serial.print("Failed to find all characteristics: ");
-		if(pDateTimeCharacteristic == nullptr)
+		if (pDateTimeCharacteristic == nullptr)
 			Serial.println("BBBB");
-		if(pHashCharacteristic == nullptr)
+		if (pHashCharacteristic == nullptr)
 			Serial.println("CCCC");
-		if(pAliveTimeCharacteristic == nullptr)
+		if (pAliveTimeCharacteristic == nullptr)
 			Serial.println("DDDD");
 
 		pClient->disconnect();
@@ -141,12 +154,14 @@ bool connectToServer()
 
 	if (pDateTimeCharacteristic->canWrite())
 	{
-		if(pDateTimeCharacteristic->writeValue<long>(millis(), true))
+		if (pDateTimeCharacteristic->writeValue<long>(millis(), true))
 			Serial.println("Time written to client");
 	}
 
-	if(pHashCharacteristic->canNotify()) {
-		if(!pHashCharacteristic->subscribe(true, notifyCallback)) {
+	if (pHashCharacteristic->canNotify())
+	{
+		if (!pHashCharacteristic->subscribe(true, notifyCallback))
+		{
 			pClient->disconnect();
 			return false;
 		}
@@ -200,7 +215,8 @@ void loop()
 
 	if (currentTime - lastWrittenTime > 1000)
 	{
-		if(!connectedDevices.empty()) {
+		if (!connectedDevices.empty())
+		{
 
 			BLEClient *pClient = connectedDevices.begin()->second;
 			NimBLERemoteService *pSvc = pClient->getService("AAAA");
@@ -209,13 +225,12 @@ void loop()
 				NimBLERemoteCharacteristic *pChr = pSvc->getCharacteristic("BBBB");
 				if (pChr->canWrite())
 				{
-					if(pChr->writeValue<long>(currentTime))
+					if (pChr->writeValue<long>(currentTime))
 						Serial.println("Time written to client");
 					lastWrittenTime = currentTime;
 				}
 			}
 		}
-
 	}
 
 	delay(1000);
