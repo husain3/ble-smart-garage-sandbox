@@ -24,6 +24,53 @@ static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, ui
 	Serial.println((char*)pData);
 }
 
+/**  None of these are required as they will be handled by the library with defaults. **
+ **                       Remove as you see fit for your needs                        */
+class Monitor : public BLEClientCallbacks {
+public:
+	int16_t connection_id;
+	int16_t rssi_average = 0;
+
+	/* dBm to distance parameters; How to update distance_factor 1.place the
+	 * phone at a known distance (2m, 3m, 5m, 10m) 2.average about 10 RSSI
+	 * values for each of these distances, Set distance_factor so that the
+	 * calculated distance approaches the actual distances, e.g. at 5m. */
+	static constexpr float reference_power  = -50;
+	static constexpr float distance_factor = 3.5;
+
+	// uint8_t get_value() { return value++; }
+	// esp_err_t get_rssi() { return esp_ble_gap_read_rssi(remote_addr); }
+
+	static float get_distance(const int8_t rssi) {
+		return pow(10, (reference_power - rssi)/(10*distance_factor));
+	}
+
+	void onConnect(BLEClient* pClient) {
+		connectedDevices[pClient->getConnId()] = pClient;
+		Serial.println("onConnect");
+	}
+
+	void onDisconnect(BLEClient* pClient) {
+		connectedDevices.erase(pClient->getConnId());
+		Serial.println("onDisconnect");
+	}
+/***************** New - Security handled here ********************
+****** Note: these are the same return values as defaults ********/
+	uint32_t onPassKeyRequest(){
+		Serial.println("Client PassKeyRequest");
+		return 123456;
+	}
+	bool onConfirmPIN(uint32_t pass_key){
+		Serial.print("The passkey YES/NO number: ");Serial.println(pass_key);
+		return true;
+	}
+
+	void onAuthenticationComplete(ble_gap_conn_desc desc){
+		Serial.println("Starting BLE work!");
+	}
+/*******************************************************************/
+};
+
 class MyAdvertisedDeviceCallbacks : public NimBLEAdvertisedDeviceCallbacks
 {
 	void onResult(NimBLEAdvertisedDevice *advertisedDevice)
