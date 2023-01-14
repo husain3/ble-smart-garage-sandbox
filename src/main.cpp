@@ -106,10 +106,21 @@ bool connectToServer()
 	Serial.println(" - Created client");
 
 	// Connect to the remove BLE Server.
-	pClient->connect(currentDevice); // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
+	// pClient->connect(currentDevice); // if you pass BLEAdvertisedDevice instead of address, it will be recognized type of peer device address (public or private)
 
 	if (pClient->connect(currentDevice))
 		Serial.println(" - Connected to server");
+
+	if(!pClient->secureConnection()) {
+		Serial.println("UNABLE TO SECURE");
+		pClient->disconnect();
+		
+		// Add an ignore flag if too many failed secure connect requests
+		// NimBLEDevice::addIgnored(currentDevice);
+	} else {
+		Serial.println("SECURITY ESTABLISHED");
+	}
+
 
 	// Obtain a reference to the service we are after in the remote BLE server.
 	BLERemoteService *pAuthorizedVehicleService = pClient->getService(authorizedVehicleServiceUUID);
@@ -184,8 +195,8 @@ void setup()
 	// Set the callback for when devices are discovered, no duplicates.
 	pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks(), false);
 	pBLEScan->setActiveScan(true); // Set active scanning, this will get more data from the advertiser.
-	pBLEScan->setInterval(97);	   // How often the scan occurs / switches channels; in milliseconds,
-	pBLEScan->setWindow(37);	   // How long to scan during the interval; in milliseconds.
+	pBLEScan->setInterval(75);	   // How often the scan occurs / switches channels; in milliseconds,
+	pBLEScan->setWindow(50);	   // How long to scan during the interval; in milliseconds.
 	pBLEScan->setMaxResults(0);	   // do not store the scan results, use callback only.
 }
 
